@@ -48,6 +48,7 @@ class ESApps(client: Client, config: StorageClientConfig, index: String)
     val json =
       (estype ->
         ("properties" ->
+          ("id" -> ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
           ("name" -> ("type" -> "string") ~ ("index" -> "not_analyzed"))))
     indices.preparePutMapping(index).setType(estype).
       setSource(compact(render(json))).get
