@@ -23,7 +23,6 @@ import org.apache.predictionio.data.storage.App
 import org.apache.predictionio.data.storage.Apps
 import org.elasticsearch.ElasticsearchException
 import org.elasticsearch.client.Client
-import org.elasticsearch.index.query.FilterBuilders._
 import org.joda.time.DateTime
 import org.json4s.JsonDSL._
 import org.json4s._

@@ -23,9 +23,10 @@ import org.apache.predictionio.data.storage.BaseStorageClient
 import org.apache.predictionio.data.storage.StorageClientConfig
 import org.apache.predictionio.data.storage.StorageClientException
 import org.elasticsearch.client.transport.TransportClient
-import org.elasticsearch.common.settings.ImmutableSettings
+import org.elasticsearch.common.settings.Settings
 import org.elasticsearch.common.transport.InetSocketTransportAddress
 import org.elasticsearch.transport.ConnectTransportException
+import java.net.InetAddress
 
 class StorageClient(val config: StorageClientConfig) extends BaseStorageClient
     with Logging {
@@ -35,13 +36,13 @@ class StorageClient(val config: StorageClientConfig) extends BaseStorageClient
       map(_.split(",").toSeq).getOrElse(Seq("localhost"))
     val ports = config.properties.get("PORTS").
       map(_.split(",").toSeq.map(_.toInt)).getOrElse(Seq(9300))
-    val settings = ImmutableSettings.settingsBuilder()
+    val settings = Settings.settingsBuilder()
       .put("cluster.name", config.properties.getOrElse("CLUSTERNAME", "elasticsearch"))
-    val transportClient = new TransportClient(settings)
+    val transportClient = TransportClient.builder().settings(settings).build()
     // TODO: バージョンによってクライアントの生成方法が変わる（リフレクションするなど）
     (hosts zip ports) foreach { hp =>
       transportClient.addTransportAddress(
-        new InetSocketTransportAddress(hp._1, hp._2))
+        new InetSocketTransportAddress(InetAddress.getByName(hp._1), hp._2))
     }
     transportClient
   } catch {

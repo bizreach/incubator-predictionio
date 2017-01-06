@@ -42,6 +42,7 @@ dependencyOverrides +=   "org.slf4j" % "slf4j-log4j12" % "1.7.18"
 assemblyMergeStrategy in assembly := {
   case PathList("META-INF", "LICENSE.txt") => MergeStrategy.concat
   case PathList("META-INF", "NOTICE.txt")  => MergeStrategy.concat
+  case PathList("org", "joda", "time", "base", "BaseDateTime.class") => MergeStrategy.first
   case x =>
     val oldStrategy = (assemblyMergeStrategy in assembly).value
     oldStrategy(x)
