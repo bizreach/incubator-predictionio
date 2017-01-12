@@ -18,34 +18,16 @@
 
 package org.apache.predictionio.data.storage.elasticsearch
 
-import org.apache.hadoop.io.{DoubleWritable, LongWritable, Text, MapWritable}
+import org.apache.hadoop.io.DoubleWritable
+import org.apache.hadoop.io.LongWritable
+import org.apache.hadoop.io.MapWritable
+import org.apache.hadoop.io.Text
+import org.apache.predictionio.data.storage.DataMap
 import org.apache.predictionio.data.storage.Event
 import org.apache.predictionio.data.storage.EventValidation
-import org.apache.predictionio.data.storage.DataMap
-
-import org.apache.hadoop.hbase.client.Result
-import org.apache.hadoop.hbase.client.Put
-import org.apache.hadoop.hbase.client.Scan
-import org.apache.hadoop.hbase.util.Bytes
-import org.apache.hadoop.hbase.filter.FilterList
-import org.apache.hadoop.hbase.filter.RegexStringComparator
-import org.apache.hadoop.hbase.filter.SingleColumnValueFilter
-import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp
-import org.apache.hadoop.hbase.filter.BinaryComparator
-import org.apache.hadoop.hbase.filter.QualifierFilter
-import org.apache.hadoop.hbase.filter.SkipFilter
-
-import org.json4s.DefaultFormats
-import org.json4s.JObject
-import org.json4s.native.Serialization.{ read, write }
-
 import org.joda.time.DateTime
 import org.joda.time.DateTimeZone
-
-import org.apache.commons.codec.binary.Base64
-import java.security.MessageDigest
-
-import java.util.UUID
+import org.json4s._
 
 object ESEventsUtil {
 

@@ -15,45 +15,39 @@
  * limitations under the License.
  */
 
-
 package org.apache.predictionio.data.storage.elasticsearch
 
-import grizzled.slf4j.Logging
-import org.apache.predictionio.data.storage.StorageClientConfig
+import java.io.IOException
+
+import scala.collection.JavaConverters.mapAsJavaMapConverter
+
+import org.apache.http.entity.ContentType
+import org.apache.http.nio.entity.NStringEntity
+import org.apache.http.util.EntityUtils
 import org.apache.predictionio.data.storage.AccessKey
 import org.apache.predictionio.data.storage.AccessKeys
-import org.elasticsearch.ElasticsearchException
-import org.elasticsearch.client.Client
-import org.elasticsearch.index.query.QueryBuilders._
-import org.json4s.JsonDSL._
+import org.apache.predictionio.data.storage.StorageClientConfig
+import org.elasticsearch.client.RestClient
 import org.json4s._
+import org.json4s.JsonDSL._
 import org.json4s.native.JsonMethods._
-import org.json4s.native.Serialization.read
 import org.json4s.native.Serialization.write
 
-import scala.util.Random
+import grizzled.slf4j.Logging
 
 /** Elasticsearch implementation of AccessKeys. */
-class ESAccessKeys(client: Client, config: StorageClientConfig, index: String)
+class ESAccessKeys(client: RestClient, config: StorageClientConfig, index: String)
     extends AccessKeys with Logging {
   implicit val formats = DefaultFormats.lossless
   private val estype = "accesskeys"
 
-  val indices = client.admin.indices
-  val indexExistResponse = indices.prepareExists(index).get
-  if (!indexExistResponse.isExists) {
-    indices.prepareCreate(index).get
-  }
-  val typeExistResponse = indices.prepareTypesExists(index).setTypes(estype).get
-  if (!typeExistResponse.isExists) {
-    val json =
-      (estype ->
-        ("properties" ->
-          ("key" -> ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-          ("events" -> ("type" -> "string") ~ ("index" -> "not_analyzed"))))
-    indices.preparePutMapping(index).setType(estype).
-      setSource(compact(render(json))).get
-  }
+  ESUtils.createIndex(client, index)
+  val mappingJson =
+    (estype ->
+      ("properties" ->
+        ("key" -> ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
+        ("events" -> ("type" -> "string") ~ ("index" -> "not_analyzed"))))
+  ESUtils.createMapping(client, index, estype, compact(render(mappingJson)))
 
   def insert(accessKey: AccessKey): Option[String] = {
     val key = if (accessKey.key.isEmpty) generateKey else accessKey.key
@@ -61,59 +55,92 @@ class ESAccessKeys(client: Client, config: StorageClientConfig, index: String)
     Some(key)
   }
 
-  def get(key: String): Option[AccessKey] = {
+  def get(id: String): Option[AccessKey] = {
     try {
-      val response = client.prepareGet(
-        index,
-        estype,
-        key).get()
-      Some(read[AccessKey](response.getSourceAsString))
+      val response = client.performRequest(
+        "GET",
+        s"/$index/$estype/$id",
+        Map.empty[String, String].asJava)
+      val jsonResponse = parse(EntityUtils.toString(response.getEntity))
+      (jsonResponse \ "found").extract[Boolean] match {
+        case true =>
+          Some((jsonResponse \ "_source").extract[AccessKey])
+        case _ =>
+          None
+      }
     } catch {
-      case e: ElasticsearchException =>
-        error(e.getMessage)
+      case e: IOException =>
+        error("Failed to access to /$index/$estype/$key", e)
         None
-      case e: NullPointerException => None
     }
   }
 
   def getAll(): Seq[AccessKey] = {
     try {
-      val builder = client.prepareSearch(index).setTypes(estype)
-      ESUtils.getAll[AccessKey](client, builder)
+      val json =
+        ("query" ->
+          ("match_all" -> List.empty))
+      ESUtils.getAll[AccessKey](client, index, estype, compact(render(json)))
     } catch {
-      case e: ElasticsearchException =>
-        error(e.getMessage)
-        Seq[AccessKey]()
+      case e: IOException =>
+        error("Failed to access to /$index/$estype/_search", e)
+        Nil
     }
   }
 
   def getByAppid(appid: Int): Seq[AccessKey] = {
     try {
-      val builder = client.prepareSearch(index).setTypes(estype).
-        setQuery(termQuery("appid", appid))
-      ESUtils.getAll[AccessKey](client, builder)
+      val json =
+        ("query" ->
+          ("term" ->
+            ("appid" -> appid)))
+      ESUtils.getAll[AccessKey](client, index, estype, compact(render(json)))
     } catch {
-      case e: ElasticsearchException =>
-        error(e.getMessage)
-        Seq[AccessKey]()
+      case e: IOException =>
+        error("Failed to access to /$index/$estype/_search", e)
+        Nil
     }
   }
 
   def update(accessKey: AccessKey): Unit = {
+    val id = accessKey.key
     try {
-      client.prepareIndex(index, estype, accessKey.key).setSource(write(accessKey)).get()
+      val entity = new NStringEntity(write(accessKey), ContentType.APPLICATION_JSON)
+      val response = client.performRequest(
+        "POST",
+        s"/$index/$estype/$id",
+        Map.empty[String, String].asJava,
+        entity)
+      val jsonResponse = parse(EntityUtils.toString(response.getEntity))
+      val result = (jsonResponse \ "result").extract[String]
+      result match {
+        case "created" =>
+        case "updated" =>
+        case _ =>
+          error(s"[$result] Failed to update $index/$estype/$id")
+      }
     } catch {
-      case e: ElasticsearchException =>
-        error(e.getMessage)
+      case e: IOException =>
+        error(s"Failed to update $index/$estype/$id", e)
     }
   }
 
-  def delete(key: String): Unit = {
+  def delete(id: String): Unit = {
     try {
-      client.prepareDelete(index, estype, key).get
+      val response = client.performRequest(
+        "DELETE",
+        s"/$index/$estype/$id",
+        Map.empty[String, String].asJava)
+      val json = parse(EntityUtils.toString(response.getEntity))
+      val result = (json \ "result").extract[String]
+      result match {
+        case "deleted" =>
+        case _ =>
+          error(s"[$result] Failed to update $index/$estype/id")
+      }
     } catch {
-      case e: ElasticsearchException =>
-        error(e.getMessage)
+      case e: IOException =>
+        error(s"Failed to update $index/$estype/id", e)
     }
   }
 }

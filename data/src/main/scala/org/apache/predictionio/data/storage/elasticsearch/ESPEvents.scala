@@ -15,15 +15,13 @@
  * limitations under the License.
  */
 
-
 package org.apache.predictionio.data.storage.elasticsearch
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.io.{Text, MapWritable}
-import org.apache.predictionio.data.storage.{StorageClientConfig, PEvents, Event}
+import org.apache.hadoop.io.{ Text, MapWritable }
+import org.apache.predictionio.data.storage.{ StorageClientConfig, PEvents, Event }
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import org.elasticsearch.client.transport.TransportClient
 import org.elasticsearch.hadoop.mr.EsInputFormat
 import org.elasticsearch.spark.rdd.EsSpark
 import org.joda.time.DateTime
@@ -31,13 +29,31 @@ import org.joda.time.DateTime
 // TODO for elasticsearch
 import org.apache.spark.SparkConf
 import org.elasticsearch.spark._
+import org.elasticsearch.client.RestClient
 
+class ESPEvents(client: RestClient, config: StorageClientConfig, index: String)
+    extends PEvents {
 
-class ESPEvents( client: TransportClient, config: StorageClientConfig, namespace: String)
-  extends PEvents {
+  def getEsType(appId: Int, channelId: Option[Int] = None): String = {
+    channelId.map { ch =>
+      s"${appId}_${ch}"
+    }.getOrElse {
+      s"${appId}"
+    }
+  }
 
-  override
-  def find(
+  def getESNodes(): String = {
+    val hosts = config.properties.get("HOSTS").
+      map(_.split(",").toSeq).getOrElse(Seq("localhost"))
+    val ports = config.properties.get("PORTS").
+      map(_.split(",").toSeq.map(_.toInt)).getOrElse(Seq(9200))
+    val schemes = config.properties.get("SCHEMES").
+      map(_.split(",").toSeq).getOrElse(Seq("http"))
+    (hosts, ports, schemes).zipped.map(
+      (h, p, s) => s"$s://$h:$p").mkString(",")
+  }
+
+  override def find(
     appId: Int,
     channelId: Option[Int] = None,
     startTime: Option[DateTime] = None,
@@ -46,8 +62,7 @@ class ESPEvents( client: TransportClient, config: StorageClientConfig, namespace
     entityId: Option[String] = None,
     eventNames: Option[Seq[String]] = None,
     targetEntityType: Option[Option[String]] = None,
-    targetEntityId: Option[Option[String]] = None
-    )(sc: SparkContext): RDD[Event] = {
+    targetEntityId: Option[Option[String]] = None)(sc: SparkContext): RDD[Event] = {
 
     // TODO: ES Hadoop Configuration Builder 的なものがあるかを調査
     // https://www.elastic.co/guide/en/elasticsearch/hadoop/current/configuration.html
@@ -57,28 +72,27 @@ class ESPEvents( client: TransportClient, config: StorageClientConfig, namespace
       entityType.map(x => s"""{"term":{"entityType":"${x}"}}"""),
       targetEntityType.flatMap(xx => xx.map(x => s"""{"term":{"targetEntityType":"${x}"}}""")),
       eventNames
-        .map{xx => xx.map(x => "\"%s\"".format(x))}
-        .map(x => s"""{"terms":{"event":[${x.mkString(",")}]}}""")
-    ).flatten.mkString(",")
+        .map { xx => xx.map(x => "\"%s\"".format(x)) }
+        .map(x => s"""{"terms":{"event":[${x.mkString(",")}]}}""")).flatten.mkString(",")
     val query = s"""{"query":{"bool":{"must":[${must_query}]}}}"""
 
+    val estype = getEsType(appId, channelId)
     val conf = new Configuration()
-    conf.set("es.resource", "pio_event/events"); // TODO: Index/Type などPIOのルールを調べる
-    conf.set("es.query", query); // TODO: クエリは動的に生成する
+    conf.set("es.resource", s"$index/$estype")
+    conf.set("es.query", query) // TODO: クエリは動的に生成する
+    conf.set("es.nodes", getESNodes())
 
     val rdd = sc.newAPIHadoopRDD(conf, classOf[EsInputFormat[Text, MapWritable]],
-      classOf[Text], classOf[MapWritable]
-    ).map {
-      case (key, doc) => {
-        ESEventsUtil.resultToEvent(key, doc, appId)
+      classOf[Text], classOf[MapWritable]).map {
+        case (key, doc) => {
+          ESEventsUtil.resultToEvent(key, doc, appId)
+        }
       }
-    }
 
     rdd
   }
 
-  override
-  def write(events: RDD[Event], appId: Int, channelId: Option[Int])(sc: SparkContext): Unit = {
+  override def write(events: RDD[Event], appId: Int, channelId: Option[Int])(sc: SparkContext): Unit = {
     val conf = new Configuration()
     conf.set("es.resource.write", "pio_event/events"); // TODO Index/Type などPIOのルールを調べる
     conf.set("es.query", "?q=me*"); // TODO クエリを決める
@@ -88,8 +102,7 @@ class ESPEvents( client: TransportClient, config: StorageClientConfig, namespace
     }.saveToEs("pio/events")
   }
 
-  override
-  def delete(eventIds: RDD[String], appId: Int, channelId: Option[Int])(sc: SparkContext): Unit = {
+  override def delete(eventIds: RDD[String], appId: Int, channelId: Option[Int])(sc: SparkContext): Unit = {
     ???
   }
 

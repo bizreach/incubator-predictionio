@@ -15,59 +15,90 @@
  * limitations under the License.
  */
 
-
 package org.apache.predictionio.data.storage.elasticsearch
 
-import grizzled.slf4j.Logging
-import org.apache.predictionio.data.storage.EngineManifestSerializer
-import org.apache.predictionio.data.storage.StorageClientConfig
+import java.io.IOException
+
+import scala.collection.JavaConverters._
+
+import org.apache.http.entity.ContentType
+import org.apache.http.nio.entity.NStringEntity
+import org.apache.http.util.EntityUtils
 import org.apache.predictionio.data.storage.EngineManifest
+import org.apache.predictionio.data.storage.EngineManifestSerializer
 import org.apache.predictionio.data.storage.EngineManifests
-import org.elasticsearch.ElasticsearchException
-import org.elasticsearch.client.Client
+import org.apache.predictionio.data.storage.StorageClientConfig
+import org.elasticsearch.client.RestClient
 import org.json4s._
-import org.json4s.native.Serialization.read
+import org.json4s.JsonDSL._
+import org.json4s.native.JsonMethods._
 import org.json4s.native.Serialization.write
 
-class ESEngineManifests(client: Client, config: StorageClientConfig, index: String)
-  extends EngineManifests with Logging {
+import grizzled.slf4j.Logging
+
+class ESEngineManifests(client: RestClient, config: StorageClientConfig, index: String)
+    extends EngineManifests with Logging {
   implicit val formats = DefaultFormats + new EngineManifestSerializer
   private val estype = "engine_manifests"
-  private def esid(id: String, version: String) = s"$id $version"
+  private def esid(id: String, version: String) = s"$id-$version"
+
+  // TODO mapping
 
   def insert(engineManifest: EngineManifest): Unit = {
-    val json = write(engineManifest)
-    val response = client.prepareIndex(
-      index,
-      estype,
-      esid(engineManifest.id, engineManifest.version)).
-      setSource(json).execute().actionGet()
+    val id = esid(engineManifest.id, engineManifest.version)
+    try {
+      val entity = new NStringEntity(write(engineManifest), ContentType.APPLICATION_JSON)
+      val response = client.performRequest(
+        "POST",
+        s"/$index/$estype/$id",
+        Map.empty[String, String].asJava,
+        entity)
+      val jsonResponse = parse(EntityUtils.toString(response.getEntity))
+      val result = (jsonResponse \ "result").extract[String]
+      result match {
+        case "created" =>
+        case "updated" =>
+        case _ =>
+          error(s"[$result] Failed to update $index/$estype/$id")
+      }
+    } catch {
+      case e: IOException =>
+        error(s"Failed to update $index/$estype/$id", e)
+    }
   }
 
   def get(id: String, version: String): Option[EngineManifest] = {
+    val esId = esid(id, version)
     try {
-      val response = client.prepareGet(index, estype, esid(id, version)).
-        execute().actionGet()
-      if (response.isExists) {
-        Some(read[EngineManifest](response.getSourceAsString))
-      } else {
-        None
+      val response = client.performRequest(
+        "GET",
+        s"/$index/$estype/$esId",
+        Map.empty[String, String].asJava)
+      val jsonResponse = parse(EntityUtils.toString(response.getEntity))
+      (jsonResponse \ "found").extract[Boolean] match {
+        case true =>
+          Some((jsonResponse \ "_source").extract[EngineManifest])
+        case _ =>
+          None
       }
     } catch {
-      case e: ElasticsearchException =>
-        error(e.getMessage)
+      case e: IOException =>
+        error(s"Failed to access to /$index/$estype/$esId", e)
         None
     }
+
   }
 
   def getAll(): Seq[EngineManifest] = {
     try {
-      val builder = client.prepareSearch()
-      ESUtils.getAll[EngineManifest](client, builder)
+      val json =
+        ("query" ->
+          ("match_all" ->  List.empty))
+      ESUtils.getAll[EngineManifest](client, index, estype, compact(render(json)))
     } catch {
-      case e: ElasticsearchException =>
-        error(e.getMessage)
-        Seq()
+      case e: IOException =>
+        error("Failed to access to /$index/$estype/_search", e)
+        Nil
     }
   }
 
@@ -75,10 +106,22 @@ class ESEngineManifests(client: Client, config: StorageClientConfig, index: Stri
     insert(engineManifest)
 
   def delete(id: String, version: String): Unit = {
+    val esId = esid(id, version)
     try {
-      client.prepareDelete(index, estype, esid(id, version)).execute().actionGet()
+      val response = client.performRequest(
+        "DELETE",
+        s"/$index/$estype/$esId",
+        Map.empty[String, String].asJava)
+      val jsonResponse = parse(EntityUtils.toString(response.getEntity))
+      val result = (jsonResponse \ "result").extract[String]
+      result match {
+        case "deleted" =>
+        case _ =>
+          error(s"[$result] Failed to update $index/$estype/$esId")
+      }
     } catch {
-      case e: ElasticsearchException => error(e.getMessage)
+      case e: IOException =>
+        error(s"Failed to update $index/$estype/$esId", e)
     }
   }
 }

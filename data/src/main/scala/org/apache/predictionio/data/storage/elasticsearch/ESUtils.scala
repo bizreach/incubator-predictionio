@@ -17,26 +17,29 @@
 
 package org.apache.predictionio.data.storage.elasticsearch
 
+import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
+
+import org.apache.http.entity.ContentType
 import org.apache.http.entity.StringEntity
-import org.json4s.{JValue, Formats}
-import org.json4s.native.Serialization.read
-import org.json4s.native.JsonMethods._
-import scala.collection.mutable.ArrayBuffer
+import org.apache.http.nio.entity.NStringEntity
 import org.elasticsearch.client.RestClient
-import collection.JavaConversions._
+import org.json4s._
+import org.json4s.native.JsonMethods._
+import org.json4s.native.Serialization.read
 
 object ESUtils {
   val scrollLife = "60000"
-  def getAll[T : Manifest](
+  def getAll[T: Manifest](
     client: RestClient,
     index: String,
     estype: String,
     query: String)(
-    implicit formats: Formats): Seq[T] = {
+      implicit formats: Formats): Seq[T] = {
 
     val response = client.performRequest(
       "POST",
-      s"/$index/$estype/search",
+      s"/$index/$estype/_search",
       Map("scroll" -> "1m"),
       new StringEntity(query))
     val responseJValue = parse(response.getEntity.toString)
@@ -48,17 +51,56 @@ object ESUtils {
       else {
         val response = client.performRequest(
           "POST",
-          "/search/scroll",
+          "/_search/scroll",
           Map[String, String](),
           scrollBody)
         val responseJValue = parse(response.getEntity.toString)
         scroll(
           (responseJValue \ "hits" \ "hits").extract[Seq[JValue]],
-          hits.map(h => read[T](h.toString)) ++ results
-        )
+          hits.map(h => (h \ "_source").extract[T]) ++ results)
       }
     }
 
     scroll((responseJValue \ "hits" \ "hits").extract[Seq[JValue]], Nil)
+  }
+
+  def createIndex(
+    client: RestClient,
+    index: String): Unit = {
+    client.performRequest(
+      "HEAD",
+      index,
+      Map.empty[String, String].asJava).getStatusLine.getStatusCode match {
+        case 404 =>
+          client.performRequest(
+            "PUT",
+            index,
+            Map.empty[String, String].asJava)
+        case 200 =>
+        case _ =>
+          throw new IllegalStateException(s"/$index is invalid.")
+      }
+  }
+
+  def createMapping(
+    client: RestClient,
+    index: String,
+    estype: String,
+    json: String): Unit = {
+    client.performRequest(
+      "HEAD",
+      index + "/_mapping/" + estype,
+      Map.empty[String, String].asJava).getStatusLine.getStatusCode match {
+        case 404 =>
+          val entity = new NStringEntity(json, ContentType.APPLICATION_JSON)
+          client.performRequest(
+            "PUT",
+            index,
+            Map.empty[String, String].asJava,
+            entity)
+        case 200 =>
+        case _ =>
+          throw new IllegalStateException(s"$index/$estype is invalid.")
+      }
   }
 }
