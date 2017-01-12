@@ -69,7 +69,7 @@ object ESUtils {
     index: String): Unit = {
     client.performRequest(
       "HEAD",
-      index,
+      s"/$index",
       Map.empty[String, String].asJava).getStatusLine.getStatusCode match {
         case 404 =>
           client.performRequest(
@@ -89,7 +89,7 @@ object ESUtils {
     json: String): Unit = {
     client.performRequest(
       "HEAD",
-      index + "/_mapping/" + estype,
+      s"/$index/_mapping/$estype",
       Map.empty[String, String].asJava).getStatusLine.getStatusCode match {
         case 404 =>
           val entity = new NStringEntity(json, ContentType.APPLICATION_JSON)
