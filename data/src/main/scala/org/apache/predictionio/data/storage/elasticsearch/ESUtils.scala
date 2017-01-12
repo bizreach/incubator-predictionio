@@ -15,34 +15,50 @@
  * limitations under the License.
  */
 
-
 package org.apache.predictionio.data.storage.elasticsearch
 
-import org.elasticsearch.action.search.SearchRequestBuilder
-import org.elasticsearch.client.Client
-import org.elasticsearch.common.unit.TimeValue
-import org.json4s.Formats
+import org.apache.http.entity.StringEntity
+import org.json4s.{JValue, Formats}
 import org.json4s.native.Serialization.read
-
+import org.json4s.native.JsonMethods._
 import scala.collection.mutable.ArrayBuffer
+import org.elasticsearch.client.RestClient
+import collection.JavaConversions._
 
 object ESUtils {
-  val scrollLife = new TimeValue(60000)
-
+  val scrollLife = "60000"
   def getAll[T : Manifest](
-      client: Client,
-      builder: SearchRequestBuilder)(
-      implicit formats: Formats): Seq[T] = {
-    val results = ArrayBuffer[T]()
-    var response = builder.setScroll(scrollLife).get
-    var hits = response.getHits().hits()
-    results ++= hits.map(h => read[T](h.getSourceAsString))
-    while (hits.size > 0) {
-      response = client.prepareSearchScroll(response.getScrollId).
-        setScroll(scrollLife).get
-      hits = response.getHits().hits()
-      results ++= hits.map(h => read[T](h.getSourceAsString))
+    client: RestClient,
+    index: String,
+    estype: String,
+    query: String)(
+    implicit formats: Formats): Seq[T] = {
+
+    val response = client.performRequest(
+      "POST",
+      s"/$index/$estype/search",
+      Map("scroll" -> "1m"),
+      new StringEntity(query))
+    val responseJValue = parse(response.getEntity.toString)
+    val scrollId = (responseJValue \ "_scroll_id").extract[String]
+    val scrollBody = new StringEntity(("scroll" -> "1m", "scroll_id" -> scrollId).toString)
+
+    def scroll(hits: Seq[JValue], results: Seq[T]): Seq[T] = {
+      if (hits.isEmpty) results
+      else {
+        val response = client.performRequest(
+          "POST",
+          "/search/scroll",
+          Map[String, String](),
+          scrollBody)
+        val responseJValue = parse(response.getEntity.toString)
+        scroll(
+          (responseJValue \ "hits" \ "hits").extract[Seq[JValue]],
+          hits.map(h => read[T](h.toString)) ++ results
+        )
+      }
     }
-    results
+
+    scroll((responseJValue \ "hits" \ "hits").extract[Seq[JValue]], Nil)
   }
 }
