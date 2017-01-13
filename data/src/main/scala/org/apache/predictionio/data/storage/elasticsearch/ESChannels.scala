@@ -44,8 +44,9 @@ class ESChannels(client: RestClient, config: StorageClientConfig, index: String)
   ESUtils.createIndex(client, index)
   val mappingJson =
     (estype ->
+      ("_all" -> ("enabled" -> 0))~
       ("properties" ->
-        ("name" -> ("type" -> "string") ~ ("index" -> "not_analyzed"))))
+        ("name" -> ("type" -> "keyword"))))
   ESUtils.createMapping(client, index, estype, compact(render(mappingJson)))
 
   def insert(channel: Channel): Option[Int] = {

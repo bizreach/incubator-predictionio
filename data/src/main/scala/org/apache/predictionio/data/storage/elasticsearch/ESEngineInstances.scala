@@ -45,28 +45,21 @@ class ESEngineInstances(client: RestClient, config: StorageClientConfig, index: 
   ESUtils.createIndex(client, index)
   val mappingJson =
     (estype ->
+      ("_all" -> ("enabled" -> 0))~
       ("properties" ->
-        ("status" -> ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
+        ("status" -> ("type" -> "keyword")) ~
         ("startTime" -> ("type" -> "date")) ~
         ("endTime" -> ("type" -> "date")) ~
-        ("engineId" -> ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-        ("engineVersion" ->
-          ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-          ("engineVariant" ->
-            ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-            ("engineFactory" ->
-              ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-              ("batch" ->
-                ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-                ("dataSourceParams" ->
-                  ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-                  ("preparatorParams" ->
-                    ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-                    ("algorithmsParams" ->
-                      ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-                      ("servingParams" ->
-                        ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-                        ("status" -> ("type" -> "string") ~ ("index" -> "not_analyzed"))))
+        ("engineId" -> ("type" -> "keyword")) ~
+        ("engineVersion" -> ("type" -> "keyword")) ~
+        ("engineVariant" -> ("type" -> "keyword")) ~
+        ("engineFactory" -> ("type" -> "keyword")) ~
+        ("batch" -> ("type" -> "keyword")) ~
+        ("dataSourceParams" -> ("type" -> "keyword")) ~
+        ("preparatorParams" -> ("type" -> "keyword")) ~
+        ("algorithmsParams" -> ("type" -> "keyword")) ~
+        ("servingParams" -> ("type" -> "keyword")) ~
+        ("status" -> ("type" -> "keyword"))))
   ESUtils.createMapping(client, index, estype, compact(render(mappingJson)))
 
   def insert(i: EngineInstance): String = {

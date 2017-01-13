@@ -42,7 +42,6 @@ class ESSequences(client: RestClient, config: StorageClientConfig, index: String
   ESUtils.createIndex(client, index)
   val mappingJson =
     (estype ->
-      ("_source" -> ("enabled" -> 0)) ~
       ("_all" -> ("enabled" -> 0)))
   ESUtils.createMapping(client, index, estype, compact(render(mappingJson)))
 

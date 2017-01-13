@@ -45,9 +45,10 @@ class ESApps(client: RestClient, config: StorageClientConfig, index: String)
   ESUtils.createIndex(client, index)
   val mappingJson =
     (estype ->
+      ("_all" -> ("enabled" -> 0))~
       ("properties" ->
-        ("id" -> ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-        ("name" -> ("type" -> "string") ~ ("index" -> "not_analyzed"))))
+        ("id" -> ("type" -> "keyword")) ~
+        ("name" -> ("type" -> "keyword"))))
   ESUtils.createMapping(client, index, estype, compact(render(mappingJson)))
 
   def insert(app: App): Option[Int] = {

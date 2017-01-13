@@ -46,22 +46,17 @@ class ESEvaluationInstances(client: RestClient, config: StorageClientConfig, ind
   ESUtils.createIndex(client, index)
   val mappingJson =
     (estype ->
+      ("_all" -> ("enabled" -> 0))~
       ("properties" ->
-        ("status" -> ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
+        ("status" -> ("type" -> "keyword")) ~
         ("startTime" -> ("type" -> "date")) ~
         ("endTime" -> ("type" -> "date")) ~
-        ("evaluationClass" ->
-          ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-          ("engineParamsGeneratorClass" ->
-            ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-            ("batch" ->
-              ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-              ("evaluatorResults" ->
-                ("type" -> "string") ~ ("index" -> "no")) ~
-                ("evaluatorResultsHTML" ->
-                  ("type" -> "string") ~ ("index" -> "no")) ~
-                  ("evaluatorResultsJSON" ->
-                    ("type" -> "string") ~ ("index" -> "no"))))
+        ("evaluationClass" -> ("type" -> "keyword")) ~
+        ("engineParamsGeneratorClass" -> ("type" -> "keyword")) ~
+        ("batch" -> ("type" -> "keyword")) ~
+        ("evaluatorResults" -> ("type" -> "text") ~ ("index" -> "no")) ~
+        ("evaluatorResultsHTML" -> ("type" -> "text") ~ ("index" -> "no")) ~
+        ("evaluatorResultsJSON" -> ("type" -> "text") ~ ("index" -> "no"))))
   ESUtils.createMapping(client, index, estype, compact(render(mappingJson)))
 
   def insert(i: EvaluationInstance): String = {

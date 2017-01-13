@@ -57,14 +57,15 @@ class ESLEvents(val client: RestClient, config: StorageClientConfig, val index: 
     ESUtils.createIndex(client, index)
     val json =
       (estype ->
+        ("_all" -> ("enabled" -> 0))~
         ("properties" ->
-          ("name" -> ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-          ("eventId" -> ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-          ("event" -> ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-          ("entityType" -> ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-          ("entityId" -> ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-          ("targetEntityType" -> ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
-          ("targetEntityId" -> ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
+          ("name" -> ("type" -> "keyword")) ~
+          ("eventId" -> ("type" -> "keyword")) ~
+          ("event" -> ("type" -> "keyword")) ~
+          ("entityType" -> ("type" -> "keyword")) ~
+          ("entityId" -> ("type" -> "keyword")) ~
+          ("targetEntityType" -> ("type" -> "keyword")) ~
+          ("targetEntityId" -> ("type" -> "keyword")) ~
           ("properties" ->
             ("type" -> "nested") ~
             ("properties" ->
@@ -73,8 +74,8 @@ class ESLEvents(val client: RestClient, config: StorageClientConfig, val index: 
                   ("user" -> ("type" -> "long")) ~
                   ("num" -> ("type" -> "long")))))) ~
                   ("eventTime" -> ("type" -> "date")) ~
-                  ("tags" -> ("type" -> "array")) ~
-                  ("prId" -> ("type" -> "string") ~ ("index" -> "not_analyzed")) ~
+                  ("tags" -> ("type" -> "keyword")) ~
+                  ("prId" -> ("type" -> "keyword")) ~
                   ("creationTime" -> ("type" -> "date"))))
     ESUtils.createMapping(client, index, estype, compact(render(json)))
     true
