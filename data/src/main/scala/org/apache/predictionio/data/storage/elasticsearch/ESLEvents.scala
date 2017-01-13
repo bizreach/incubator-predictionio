@@ -19,7 +19,6 @@ package org.apache.predictionio.data.storage.elasticsearch
 
 import java.io.IOException
 
-
 import scala.collection.JavaConverters.mapAsJavaMapConverter
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -60,7 +59,7 @@ class ESLEvents(val client: RestClient, config: StorageClientConfig, val index: 
     ESUtils.createIndex(client, index)
     val json =
       (estype ->
-        ("_all" -> ("enabled" -> 0))~
+        ("_all" -> ("enabled" -> 0)) ~
         ("properties" ->
           ("name" -> ("type" -> "keyword")) ~
           ("eventId" -> ("type" -> "keyword")) ~
@@ -248,10 +247,10 @@ class ESLEvents(val client: RestClient, config: StorageClientConfig, val index: 
     reversed: Option[Boolean] = None)(implicit ec: ExecutionContext): Future[Iterator[Event]] = {
     // TODO: FutureMapとか使うべきなのでは。。。
     Future {
+      val estype = getEsType(appId, channelId)
       try {
-        //        val builder = client.prepareSearch(index).setTypes(estype)
-        //        ESUtils.getAll[Event](client, builder).toIterator
-        Iterator[Event]()
+        val query = ESUtils.createEventQuery(startTime, untilTime, entityType, entityId, eventNames, targetEntityType, targetEntityId, None)
+        ESUtils.getAll[Event](client, index, estype, query).toIterator
       } catch {
         case e: IOException =>
           error(e.getMessage)

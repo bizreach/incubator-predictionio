@@ -30,6 +30,8 @@ import org.joda.time.DateTime
 import org.apache.spark.SparkConf
 import org.elasticsearch.spark._
 import org.elasticsearch.client.RestClient
+import org.joda.time.format.DateTimeFormat
+import org.joda.time.DateTimeZone
 
 class ESPEvents(client: RestClient, config: StorageClientConfig, index: String)
     extends PEvents {
@@ -67,14 +69,7 @@ class ESPEvents(client: RestClient, config: StorageClientConfig, index: String)
     // TODO: ES Hadoop Configuration Builder 的なものがあるかを調査
     // https://www.elastic.co/guide/en/elasticsearch/hadoop/current/configuration.html
 
-    // TODO: jacksonを使って書く & ESEventsUtilへ移動
-    val must_query = Seq(
-      entityType.map(x => s"""{"term":{"entityType":"${x}"}}"""),
-      targetEntityType.flatMap(xx => xx.map(x => s"""{"term":{"targetEntityType":"${x}"}}""")),
-      eventNames
-        .map { xx => xx.map(x => "\"%s\"".format(x)) }
-        .map(x => s"""{"terms":{"event":[${x.mkString(",")}]}}""")).flatten.mkString(",")
-    val query = s"""{"query":{"bool":{"must":[${must_query}]}}}"""
+    val query = ESUtils.createEventQuery(startTime, untilTime, entityType, entityId, eventNames, targetEntityType, targetEntityId, None)
 
     val estype = getEsType(appId, channelId)
     val conf = new Configuration()

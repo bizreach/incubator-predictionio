@@ -29,9 +29,14 @@ import org.json4s.JsonDSL._
 import org.json4s.native.JsonMethods._
 import org.json4s.native.Serialization.read
 import org.apache.http.util.EntityUtils
+import org.joda.time.DateTime
+import org.joda.time.format.DateTimeFormat
+import org.joda.time.DateTimeZone
 
 object ESUtils {
   val scrollLife = "1m"
+
+  // TODO limit
   def getAll[T: Manifest](
     client: RestClient,
     index: String,
@@ -106,5 +111,37 @@ object ESUtils {
         case _ =>
           throw new IllegalStateException(s"/$index/$estype is invalid: $json")
       }
+  }
+
+  def createEventQuery(
+    startTime: Option[DateTime] = None,
+    untilTime: Option[DateTime] = None,
+    entityType: Option[String] = None,
+    entityId: Option[String] = None,
+    eventNames: Option[Seq[String]] = None,
+    targetEntityType: Option[Option[String]] = None,
+    targetEntityId: Option[Option[String]] = None,
+    reversed: Option[Boolean] = None): String = {
+    val mustQueries = Seq(
+      startTime.map(x => {
+        val v = DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ").print(x.withZone(DateTimeZone.UTC))
+        s"""{"range":{"eventTime":{"gte":"${v}"}}}"""
+      }),
+      untilTime.map(x => {
+        val v = DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ").print(x.withZone(DateTimeZone.UTC))
+        s"""{"range":{"eventTime":{"gte":"${v}"}}}"""
+      }),
+      entityType.map(x => s"""{"term":{"entityType":"${x}"}}"""),
+      entityId.map(x => s"""{"term":{"entityId":"${x}"}}"""),
+      targetEntityType.flatMap(xx => xx.map(x => s"""{"term":{"targetEntityType":"${x}"}}""")),
+      targetEntityId.flatMap(xx => xx.map(x => s"""{"term":{"targetEntityId":"${x}"}}""")),
+      eventNames
+        .map { xx => xx.map(x => "\"%s\"".format(x)) }
+        .map(x => s"""{"terms":{"event":[${x.mkString(",")}]}}""")).flatten.mkString(",")
+    val sortOrder = reversed.map(x => x match {
+      case true => "desc"
+      case _ => "asc"
+    })
+    s"""{"query":{"bool":{"must":[${mustQueries}]}},"sort":[{"eventTime":{"order":"${sortOrder}"}}]}"""
   }
 }
