@@ -25,12 +25,13 @@ import org.apache.http.entity.StringEntity
 import org.apache.http.nio.entity.NStringEntity
 import org.elasticsearch.client.RestClient
 import org.json4s._
+import org.json4s.JsonDSL._
 import org.json4s.native.JsonMethods._
 import org.json4s.native.Serialization.read
 import org.apache.http.util.EntityUtils
 
 object ESUtils {
-  val scrollLife = "60000"
+  val scrollLife = "1m"
   def getAll[T: Manifest](
     client: RestClient,
     index: String,
@@ -38,31 +39,33 @@ object ESUtils {
     query: String)(
       implicit formats: Formats): Seq[T] = {
 
-    val response = client.performRequest(
-      "POST",
-      s"/$index/$estype/_search",
-      Map("scroll" -> "1m"),
-      new StringEntity(query))
-    val responseJValue = parse(EntityUtils.toString(response.getEntity))
-    val scrollId = (responseJValue \ "_scroll_id").extract[String]
-    val scrollBody = new StringEntity(("scroll" -> "1m", "scroll_id" -> scrollId).toString)
-
-    def scroll(hits: Seq[JValue], results: Seq[T]): Seq[T] = {
+    @scala.annotation.tailrec
+    def scroll(scrollId: String, hits: Seq[JValue], results: Seq[T]): Seq[T] = {
       if (hits.isEmpty) results
       else {
+        val json = ("scroll" -> scrollLife) ~ ("scroll_id" -> scrollId)
+        val scrollBody = new StringEntity(compact(render(json)))
         val response = client.performRequest(
           "POST",
           "/_search/scroll",
           Map[String, String](),
           scrollBody)
         val responseJValue = parse(EntityUtils.toString(response.getEntity))
-        scroll(
+        scroll((responseJValue \ "_scroll_id").extract[String],
           (responseJValue \ "hits" \ "hits").extract[Seq[JValue]],
           hits.map(h => (h \ "_source").extract[T]) ++ results)
       }
     }
 
-    scroll((responseJValue \ "hits" \ "hits").extract[Seq[JValue]], Nil)
+    val response = client.performRequest(
+      "POST",
+      s"/$index/$estype/_search",
+      Map("scroll" -> scrollLife),
+      new StringEntity(query))
+    val responseJValue = parse(EntityUtils.toString(response.getEntity))
+    scroll((responseJValue \ "_scroll_id").extract[String],
+        (responseJValue \ "hits" \ "hits").extract[Seq[JValue]],
+        Nil)
   }
 
   def createIndex(
