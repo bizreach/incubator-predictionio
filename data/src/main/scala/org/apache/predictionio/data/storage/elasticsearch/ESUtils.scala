@@ -74,7 +74,7 @@ object ESUtils {
         case 404 =>
           client.performRequest(
             "PUT",
-            index,
+            s"/$index",
             Map.empty[String, String].asJava)
         case 200 =>
         case _ =>
@@ -95,12 +95,12 @@ object ESUtils {
           val entity = new NStringEntity(json, ContentType.APPLICATION_JSON)
           client.performRequest(
             "PUT",
-            index,
+            s"/$index/_mapping/$estype",
             Map.empty[String, String].asJava,
             entity)
         case 200 =>
         case _ =>
-          throw new IllegalStateException(s"$index/$estype is invalid.")
+          throw new IllegalStateException(s"$index/$estype is invalid: $json")
       }
   }
 }
