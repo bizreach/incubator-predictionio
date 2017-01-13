@@ -19,6 +19,7 @@ package org.apache.predictionio.data.storage.elasticsearch
 
 import java.io.IOException
 
+
 import scala.collection.JavaConverters.mapAsJavaMapConverter
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -35,12 +36,13 @@ import org.json4s._
 import org.json4s.JsonDSL._
 import org.json4s.native.JsonMethods._
 import org.json4s.native.Serialization.write
+import org.json4s.ext.JodaTimeSerializers
 
 import grizzled.slf4j.Logging
 
 class ESLEvents(val client: RestClient, config: StorageClientConfig, val index: String)
     extends LEvents with Logging {
-  implicit val formats = DefaultFormats.lossless
+  implicit val formats = DefaultFormats.lossless ++ JodaTimeSerializers.all
   private val seq = new ESSequences(client, config, index)
   private val seqName = "events"
 
