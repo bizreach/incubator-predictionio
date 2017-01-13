@@ -119,11 +119,12 @@ class ESLEvents(val client: RestClient, config: StorageClientConfig, val index: 
         while (exists(estype, roll)) roll = seq.genNext(seqName)
         roll.toString
       }
+      val json = write(event.copy(eventId = Some(id)))
       try {
-        val entity = new NStringEntity(write(event.copy(eventId = Some(id))), ContentType.APPLICATION_JSON);
+        val entity = new NStringEntity(json, ContentType.APPLICATION_JSON);
         val response = client.performRequest(
           "POST",
-          s"$index/$estype/$id",
+          s"/$index/$estype/$id",
           Map.empty[String, String].asJava,
           entity)
         val jsonResponse = parse(EntityUtils.toString(response.getEntity))
@@ -137,7 +138,7 @@ class ESLEvents(val client: RestClient, config: StorageClientConfig, val index: 
         }
       } catch {
         case e: IOException =>
-          error(s"Failed to update $index/$estype/$id", e)
+          error(s"Failed to update $index/$estype/$id: $json", e)
           ""
       }
     }
@@ -147,7 +148,7 @@ class ESLEvents(val client: RestClient, config: StorageClientConfig, val index: 
     try {
       client.performRequest(
         "GET",
-        s"$index/$estype/$id",
+        s"/$index/$estype/$id",
         Map.empty[String, String].asJava).getStatusLine.getStatusCode match {
           case 200 => true
           case _ => false

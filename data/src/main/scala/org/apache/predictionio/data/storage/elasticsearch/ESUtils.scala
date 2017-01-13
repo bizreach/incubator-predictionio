@@ -100,7 +100,7 @@ object ESUtils {
             entity)
         case 200 =>
         case _ =>
-          throw new IllegalStateException(s"$index/$estype is invalid: $json")
+          throw new IllegalStateException(s"/$index/$estype is invalid: $json")
       }
   }
 }
