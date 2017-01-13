@@ -39,6 +39,7 @@ import org.json4s.native.Serialization.write
 import org.json4s.ext.JodaTimeSerializers
 
 import grizzled.slf4j.Logging
+import org.elasticsearch.client.ResponseException
 
 class ESLEvents(val client: RestClient, config: StorageClientConfig, val index: String)
     extends LEvents with Logging {
@@ -156,6 +157,13 @@ class ESLEvents(val client: RestClient, config: StorageClientConfig, val index: 
           case _ => false
         }
     } catch {
+      case e: ResponseException =>
+        e.getResponse.getStatusLine.getStatusCode match {
+          case 404 => false
+          case _ =>
+            error(s"Failed to access to /$index/$estype/$id", e)
+            false
+        }
       case e: IOException =>
         error(s"Failed to access to $index/$estype/$id", e)
         false

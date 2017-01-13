@@ -27,6 +27,7 @@ import org.elasticsearch.client.RestClient
 import org.json4s._
 import org.json4s.native.JsonMethods._
 import org.json4s.native.Serialization.read
+import org.apache.http.util.EntityUtils
 
 object ESUtils {
   val scrollLife = "60000"
@@ -42,7 +43,7 @@ object ESUtils {
       s"/$index/$estype/_search",
       Map("scroll" -> "1m"),
       new StringEntity(query))
-    val responseJValue = parse(response.getEntity.toString)
+    val responseJValue = parse(EntityUtils.toString(response.getEntity))
     val scrollId = (responseJValue \ "_scroll_id").extract[String]
     val scrollBody = new StringEntity(("scroll" -> "1m", "scroll_id" -> scrollId).toString)
 
@@ -54,7 +55,7 @@ object ESUtils {
           "/_search/scroll",
           Map[String, String](),
           scrollBody)
-        val responseJValue = parse(response.getEntity.toString)
+        val responseJValue = parse(EntityUtils.toString(response.getEntity))
         scroll(
           (responseJValue \ "hits" \ "hits").extract[Seq[JValue]],
           hits.map(h => (h \ "_source").extract[T]) ++ results)

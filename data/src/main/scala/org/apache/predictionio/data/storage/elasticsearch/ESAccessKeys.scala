@@ -34,6 +34,7 @@ import org.json4s.native.JsonMethods._
 import org.json4s.native.Serialization.write
 
 import grizzled.slf4j.Logging
+import org.elasticsearch.client.ResponseException
 
 /** Elasticsearch implementation of AccessKeys. */
 class ESAccessKeys(client: RestClient, config: StorageClientConfig, index: String)
@@ -70,6 +71,13 @@ class ESAccessKeys(client: RestClient, config: StorageClientConfig, index: Strin
           None
       }
     } catch {
+      case e: ResponseException =>
+        e.getResponse.getStatusLine.getStatusCode match {
+          case 404 => None
+          case _ =>
+            error(s"Failed to access to /$index/$estype/$id", e)
+            None
+        }
       case e: IOException =>
         error("Failed to access to /$index/$estype/$key", e)
         None

@@ -35,6 +35,7 @@ import org.json4s.native.JsonMethods._
 import org.json4s.native.Serialization.write
 
 import grizzled.slf4j.Logging
+import org.elasticsearch.client.ResponseException
 
 class ESEngineManifests(client: RestClient, config: StorageClientConfig, index: String)
     extends EngineManifests with Logging {
@@ -82,6 +83,13 @@ class ESEngineManifests(client: RestClient, config: StorageClientConfig, index: 
           None
       }
     } catch {
+      case e: ResponseException =>
+        e.getResponse.getStatusLine.getStatusCode match {
+          case 404 => None
+          case _ =>
+            error(s"Failed to access to /$index/$estype/$id", e)
+            None
+        }
       case e: IOException =>
         error(s"Failed to access to /$index/$estype/$esId", e)
         None
