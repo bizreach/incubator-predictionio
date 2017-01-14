@@ -241,5 +241,4 @@ object DataMap {
     */
   def apply(js: String): DataMap = apply(parse(js).asInstanceOf[JObject])
 
-  // TODO: implement apply method for elasticsearch
 }

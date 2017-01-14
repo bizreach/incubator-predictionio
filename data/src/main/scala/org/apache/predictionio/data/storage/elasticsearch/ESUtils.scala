@@ -32,11 +32,13 @@ import org.apache.http.util.EntityUtils
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
 import org.joda.time.DateTimeZone
+import org.apache.predictionio.data.storage.StorageClientConfig
+import org.apache.http.HttpHost
 
 object ESUtils {
   val scrollLife = "1m"
 
-  // TODO limit
+  // TODO add limit
   def getAll[T: Manifest](
     client: RestClient,
     index: String,
@@ -143,5 +145,17 @@ object ESUtils {
       case _ => "asc"
     })
     s"""{"query":{"bool":{"must":[${mustQueries}]}},"sort":[{"eventTime":{"order":"${sortOrder}"}}]}"""
+  }
+
+  def createRestClient(config: StorageClientConfig): RestClient = {
+    val hosts = config.properties.get("HOSTS").
+      map(_.split(",").toSeq).getOrElse(Seq("localhost"))
+    val ports = config.properties.get("PORTS").
+      map(_.split(",").toSeq.map(_.toInt)).getOrElse(Seq(9200))
+    val schemes = config.properties.get("SCHEMES").
+      map(_.split(",").toSeq).getOrElse(Seq("http"))
+    val httpHosts = (hosts, ports, schemes).zipped.map(
+      (h, p, s) => new HttpHost(h, p, s))
+    RestClient.builder(httpHosts: _*).build()
   }
 }

@@ -30,16 +30,7 @@ class StorageClient(val config: StorageClientConfig) extends BaseStorageClient
   override val prefix = "ES"
 
   val client = try {
-    val hosts = config.properties.get("HOSTS").
-      map(_.split(",").toSeq).getOrElse(Seq("localhost"))
-    val ports = config.properties.get("PORTS").
-      map(_.split(",").toSeq.map(_.toInt)).getOrElse(Seq(9200))
-    val schemes = config.properties.get("SCHEMES").
-      map(_.split(",").toSeq).getOrElse(Seq("http"))
-    val httpHosts = (hosts, ports, schemes).zipped.map(
-      (h, p, s) => new HttpHost(h, p, s))
-    val restClient = RestClient.builder(httpHosts: _*).build()
-    restClient
+    ESUtils.createRestClient(config)
   } catch {
     case e: Throwable =>
       throw new StorageClientException(e.getMessage, e)

@@ -17,23 +17,33 @@
 
 package org.apache.predictionio.data.storage.elasticsearch
 
+import scala.collection.JavaConverters._
+
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.io.{ Text, MapWritable }
-import org.apache.predictionio.data.storage.{ StorageClientConfig, PEvents, Event }
+import org.apache.hadoop.io.MapWritable
+import org.apache.hadoop.io.Text
+import org.apache.predictionio.data.storage.Event
+import org.apache.predictionio.data.storage.PEvents
+import org.apache.predictionio.data.storage.StorageClientConfig
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import org.elasticsearch.hadoop.mr.EsInputFormat
-import org.elasticsearch.spark.rdd.EsSpark
-import org.joda.time.DateTime
-
-import org.apache.spark.SparkConf
-import org.elasticsearch.spark._
 import org.elasticsearch.client.RestClient
-import org.joda.time.format.DateTimeFormat
-import org.joda.time.DateTimeZone
+import org.elasticsearch.hadoop.mr.EsInputFormat
+import org.elasticsearch.spark._
+import org.joda.time.DateTime
+import java.io.IOException
+import org.apache.http.util.EntityUtils
+import org.apache.http.nio.entity.NStringEntity
+import org.apache.http.entity.ContentType
+import org.json4s._
+import org.json4s.JsonDSL._
+import org.json4s.native.JsonMethods._
+import org.json4s.ext.JodaTimeSerializers
+
 
 class ESPEvents(client: RestClient, config: StorageClientConfig, index: String)
     extends PEvents {
+  implicit val formats = DefaultFormats.lossless ++ JodaTimeSerializers.all
 
   // client is not used.
   try client.close() catch {
@@ -71,15 +81,12 @@ class ESPEvents(client: RestClient, config: StorageClientConfig, index: String)
     targetEntityType: Option[Option[String]] = None,
     targetEntityId: Option[Option[String]] = None)(sc: SparkContext): RDD[Event] = {
 
-    // TODO: ES Hadoop Configuration Builder 的なものがあるかを調査
-    // https://www.elastic.co/guide/en/elasticsearch/hadoop/current/configuration.html
-
     val query = ESUtils.createEventQuery(startTime, untilTime, entityType, entityId, eventNames, targetEntityType, targetEntityId, None)
 
     val estype = getEsType(appId, channelId)
     val conf = new Configuration()
     conf.set("es.resource", s"$index/$estype")
-    conf.set("es.query", query) // TODO: クエリは動的に生成する
+    conf.set("es.query", query)
     conf.set("es.nodes", getESNodes())
 
     val rdd = sc.newAPIHadoopRDD(conf, classOf[EsInputFormat[Text, MapWritable]],
@@ -93,17 +100,46 @@ class ESPEvents(client: RestClient, config: StorageClientConfig, index: String)
   }
 
   override def write(events: RDD[Event], appId: Int, channelId: Option[Int])(sc: SparkContext): Unit = {
-    val conf = new Configuration()
-    conf.set("es.resource.write", "pio_event/events"); // TODO Index/Type などPIOのルールを調べる
-    conf.set("es.query", "?q=me*"); // TODO クエリを決める
-
+    val estype = getEsType(appId, channelId)
     events.map { event =>
       ESEventsUtil.eventToPut(event, appId)
-    }.saveToEs("pio/events")
+    }.saveToEs(s"$index/$estype")
   }
 
   override def delete(eventIds: RDD[String], appId: Int, channelId: Option[Int])(sc: SparkContext): Unit = {
-    ???
+    val estype = getEsType(appId, channelId)
+    val restClient = ESUtils.createRestClient(config)
+    try {
+      eventIds.foreachPartition { iter =>
+        iter.foreach { eventId =>
+          try {
+            val json =
+              ("query" ->
+                ("term" ->
+                  ("eventId" -> eventId)))
+            val entity = new NStringEntity(compact(render(json)), ContentType.APPLICATION_JSON)
+            val response = client.performRequest(
+              "POST",
+              s"/$index/$estype/_delete_by_query",
+              Map.empty[String, String].asJava)
+            val jsonResponse = parse(EntityUtils.toString(response.getEntity))
+            val result = (jsonResponse \ "result").extract[String]
+            result match {
+              case "deleted" => true
+              case _ =>
+                logger.error(s"[$result] Failed to update $index/$estype:$eventId")
+                false
+            }
+          } catch {
+            case e: IOException =>
+              logger.error(s"Failed to update $index/$estype:$eventId", e)
+              false
+          }
+        }
+      }
+    } finally {
+      restClient.close()
+    }
   }
 
 }

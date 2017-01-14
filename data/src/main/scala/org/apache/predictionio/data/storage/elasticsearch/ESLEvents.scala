@@ -19,7 +19,7 @@ package org.apache.predictionio.data.storage.elasticsearch
 
 import java.io.IOException
 
-import scala.collection.JavaConverters.mapAsJavaMapConverter
+import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
@@ -116,7 +116,6 @@ class ESLEvents(val client: RestClient, config: StorageClientConfig, val index: 
 
   override def futureInsert(
     event: Event, appId: Int, channelId: Option[Int])(implicit ec: ExecutionContext): Future[String] = {
-    // TODO: Future[Either]で返すようにする
     Future {
       val estype = getEsType(appId, channelId)
       val id = event.eventId.getOrElse {
@@ -174,7 +173,6 @@ class ESLEvents(val client: RestClient, config: StorageClientConfig, val index: 
 
   override def futureGet(
     eventId: String, appId: Int, channelId: Option[Int])(implicit ec: ExecutionContext): Future[Option[Event]] = {
-    // TODO: Future[Either]で返すようにする
     Future {
       val estype = getEsType(appId, channelId)
       try {
@@ -248,7 +246,6 @@ class ESLEvents(val client: RestClient, config: StorageClientConfig, val index: 
     targetEntityId: Option[Option[String]] = None,
     limit: Option[Int] = None,
     reversed: Option[Boolean] = None)(implicit ec: ExecutionContext): Future[Iterator[Event]] = {
-    // TODO: FutureMapとか使うべきなのでは。。。
     Future {
       val estype = getEsType(appId, channelId)
       try {
