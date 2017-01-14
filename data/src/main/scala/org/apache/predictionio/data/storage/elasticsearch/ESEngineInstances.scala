@@ -41,7 +41,6 @@ class ESEngineInstances(client: RestClient, config: StorageClientConfig, index: 
     extends EngineInstances with Logging {
   implicit val formats = DefaultFormats + new EngineInstanceSerializer
   private val estype = "engine_instances"
-  private val seq = new ESSequences(client, config, index)
 
   ESUtils.createIndex(client, index)
   val mappingJson =
@@ -66,14 +65,43 @@ class ESEngineInstances(client: RestClient, config: StorageClientConfig, index: 
   def insert(i: EngineInstance): String = {
     val id = i.id match {
       case x if x.isEmpty =>
-        var roll = seq.genNext(estype).toString
-        while (!get(roll).isEmpty) roll = seq.genNext(estype).toString
-        roll
+        @scala.annotation.tailrec
+        def generateId(newId: Option[String]): String = {
+          newId match {
+            case Some(x) => x
+            case _ => generateId(preInsert())
+          }
+        }
+        generateId(preInsert())
       case x => x
     }
 
     update(i.copy(id = id))
     id
+  }
+
+  def preInsert(): Option[String] = {
+    try {
+      val entity = new NStringEntity("{}", ContentType.APPLICATION_JSON)
+      val response = client.performRequest(
+        "POST",
+        s"/$index/$estype/",
+        Map.empty[String, String].asJava,
+        entity)
+      val jsonResponse = parse(EntityUtils.toString(response.getEntity))
+      val result = (jsonResponse \ "result").extract[String]
+      result match {
+        case "created" =>
+          Some((jsonResponse \ "_id").extract[String])
+        case _ =>
+          error(s"[$result] Failed to create $index/$estype")
+          None
+      }
+    } catch {
+      case e: IOException =>
+        error(s"Failed to create $index/$estype", e)
+        None
+    }
   }
 
   def get(id: String): Option[EngineInstance] = {

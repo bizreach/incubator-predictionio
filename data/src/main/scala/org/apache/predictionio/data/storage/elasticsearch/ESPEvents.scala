@@ -26,7 +26,6 @@ import org.elasticsearch.hadoop.mr.EsInputFormat
 import org.elasticsearch.spark.rdd.EsSpark
 import org.joda.time.DateTime
 
-// TODO for elasticsearch
 import org.apache.spark.SparkConf
 import org.elasticsearch.spark._
 import org.elasticsearch.client.RestClient
@@ -35,6 +34,12 @@ import org.joda.time.DateTimeZone
 
 class ESPEvents(client: RestClient, config: StorageClientConfig, index: String)
     extends PEvents {
+
+  // client is not used.
+  try client.close() catch {
+    case e: Exception =>
+      logger.error("Failed to close client.", e)
+  }
 
   def getEsType(appId: Int, channelId: Option[Int] = None): String = {
     channelId.map { ch =>

@@ -28,6 +28,7 @@ import org.apache.http.HttpHost
 class StorageClient(val config: StorageClientConfig) extends BaseStorageClient
     with Logging {
   override val prefix = "ES"
+
   val client = try {
     val hosts = config.properties.get("HOSTS").
       map(_.split(",").toSeq).getOrElse(Seq("localhost"))

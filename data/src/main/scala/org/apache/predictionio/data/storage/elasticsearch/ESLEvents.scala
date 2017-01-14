@@ -102,13 +102,16 @@ class ESLEvents(val client: RestClient, config: StorageClientConfig, val index: 
         }
     } catch {
       case e: Exception =>
-        error(s"Fail to remove $index/$estype", e)
+        error(s"Failed to remove $index/$estype", e)
         false
     }
   }
 
   override def close(): Unit = {
-    // nothing to do
+    try client.close() catch {
+      case e: Exception =>
+        error("Failed to close client.", e)
+    }
   }
 
   override def futureInsert(
